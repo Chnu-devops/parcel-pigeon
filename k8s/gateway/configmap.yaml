@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-config
+  namespace: parcelpigeon
+data:
+  PORT: "8000"
+  HOST: "0.0.0.0"
+  SHIPMENTS_URL: "http://shipments-service:8000"
+  TRACKING_URL: "http://tracking-service:8002"
+  LOG_LEVEL: "info"
