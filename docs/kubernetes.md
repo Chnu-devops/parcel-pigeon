@@ -1,5 +1,8 @@
 # Kubernetes manifests — building them by hand
 
+> On the `add-helm` branch `k8s/` has been replaced by the Helm chart in
+> `helm/parcelpigeon` — see `docs/helm-migration.md` for the migration.
+
 This is the step-by-step for live-coding the `k8s/` folder from scratch instead
 of copy-pasting it — the same live-coding pattern `docker-compose.yml` uses on
 the `local-no-docker` branch (see `docs/lecture-map.md`). Each step uses

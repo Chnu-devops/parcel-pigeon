@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq
+  labels:
+    {{- include "parcelpigeon.labels" (dict "name" "rabbitmq" "ctx" $) | nindent 4 }}
+spec:
+  replicas: {{ .Values.rabbitmq.replicas }}
+  selector:
+    matchLabels:
+      {{- include "parcelpigeon.selectorLabels" "rabbitmq" | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "parcelpigeon.labels" (dict "name" "rabbitmq" "ctx" $) | nindent 8 }}
+    spec:
+      containers:
+        - name: rabbitmq
+          image: "{{ .Values.rabbitmq.image.repository }}:{{ .Values.rabbitmq.image.tag }}"
+          ports:
+            - containerPort: {{ .Values.rabbitmq.ports.amqp }}
+            - containerPort: {{ .Values.rabbitmq.ports.management }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/rabbitmq
+          readinessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "-q", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "-q", "ping"]
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.rabbitmq.resources | nindent 12 }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: rabbitmq-data

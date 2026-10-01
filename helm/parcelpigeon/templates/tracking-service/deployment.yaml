@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tracking-service
+  labels:
+    {{- include "parcelpigeon.labels" (dict "name" "tracking-service" "ctx" $) | nindent 4 }}
+spec:
+  replicas: {{ .Values.trackingService.replicas }}
+  selector:
+    matchLabels:
+      {{- include "parcelpigeon.selectorLabels" "tracking-service" | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "parcelpigeon.labels" (dict "name" "tracking-service" "ctx" $) | nindent 8 }}
+      annotations:
+        # Roll the pods whenever the rendered ConfigMap/Secret changes.
+        checksum/config: {{ include (print $.Template.BasePath "/tracking-service/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/tracking-service/secret.yaml") . | sha256sum }}
+    spec:
+      containers:
+        - name: tracking-service
+          image: "{{ .Values.trackingService.image.repository }}:{{ .Values.trackingService.image.tag }}"
+          ports:
+            - containerPort: {{ .Values.trackingService.port }}
+          envFrom:
+            - configMapRef:
+                name: tracking-service-config
+            - secretRef:
+                name: tracking-service-secret
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: {{ .Values.trackingService.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.trackingService.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.trackingService.resources | nindent 12 }}

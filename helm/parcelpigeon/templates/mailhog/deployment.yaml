@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mailhog
+  labels:
+    {{- include "parcelpigeon.labels" (dict "name" "mailhog" "ctx" $) | nindent 4 }}
+spec:
+  replicas: {{ .Values.mailhog.replicas }}
+  selector:
+    matchLabels:
+      {{- include "parcelpigeon.selectorLabels" "mailhog" | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "parcelpigeon.labels" (dict "name" "mailhog" "ctx" $) | nindent 8 }}
+    spec:
+      containers:
+        - name: mailhog
+          image: "{{ .Values.mailhog.image.repository }}:{{ .Values.mailhog.image.tag }}"
+          ports:
+            - containerPort: {{ .Values.mailhog.ports.smtp }}
+            - containerPort: {{ .Values.mailhog.ports.ui }}
+          resources:
+            {{- toYaml .Values.mailhog.resources | nindent 12 }}
