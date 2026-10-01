@@ -258,7 +258,7 @@ Same pattern; the values key is camelCase because Go templates can't read
 | web | `web` | image, replicas, port `8080`, resources | no ConfigMap/Secret, no checksums |
 | postgres | `postgres` | image, replicas, port, `persistence.size`, secret, resources | probe user from `.Values.postgres.secret.POSTGRES_USER`; checksum on the secret only |
 | redis | `redis` | image, replicas, port, `persistence.size`, resources | keep the `command:` hardcoded |
-| rabbitmq | `rabbitmq` | image, replicas, `ports: {amqp, management}`, `persistence.size`, resources | |
+| rabbitmq | `rabbitmq` | image, replicas, `ports: {amqp, management}`, `persistence.size`, resources | fixes a bug in the raw manifests: add a `startupProbe` (TCP 5672) and `timeoutSeconds: 10` on the `rabbitmq-diagnostics` probes — otherwise the 1s default timeout makes the pod CrashLoop and shipments/gateway never get Ready |
 | mailhog | `mailhog` | image, replicas, `ports: {smtp, ui}`, resources | no PVC |
 
 For the two multi-port Services, `range` over the `ports` map so each map
