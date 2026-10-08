@@ -1,30 +1,42 @@
-# ParcelPigeon: Argo CD renders helm/parcelpigeon from Git (`helm template`) and applies it.
-# Replaces running `helm upgrade --install` by hand.
+# ParcelPigeon: one Argo CD Application per chart under helm/charts/.
+# Each service gets its own sync status, history and rollback; adding a
+# service = adding a chart folder, no Argo CD change needed.
 apiVersion: argoproj.io/v1alpha1
-kind: Application
+kind: ApplicationSet
 metadata:
   name: parcelpigeon
   namespace: argocd
-  finalizers:
-    # Deleting this Application also deletes the resources it deployed
-    # (PVCs survive thanks to their `Delete=false` sync option).
-    - resources-finalizer.argocd.argoproj.io
 spec:
-  project: default
-  source:
-    repoURL: https://github.com/rostyslavdiachuk/parcel-pigeon.git
-    targetRevision: main
-    path: helm/parcelpigeon
-    helm:
-      releaseName: parcelpigeon # same as the old `helm install` → same labels and checksums
-      valueFiles:
-        - values.yaml # image tags in here are bumped by CI on every push to main
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: parcelpigeon
-  syncPolicy:
-    automated:
-      prune: true    # resource removed from the chart → deleted from the cluster
-      selfHeal: true # `kubectl edit/scale` by hand → reverted to what Git says
-    syncOptions:
-      - CreateNamespace=true # replaces `helm install --create-namespace`
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    # One Application per folder in helm/charts/ on main.
+    - git:
+        repoURL: https://github.com/Chnu-devops/parcel-pigeon.git
+        revision: main
+        directories:
+          - path: helm/charts/*
+  template:
+    metadata:
+      name: "parcelpigeon-{{ .path.basename }}"
+      finalizers:
+        # Deleting an Application also deletes what it deployed
+        # (PVCs survive thanks to their `Delete=false` sync option).
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/Chnu-devops/parcel-pigeon.git
+        targetRevision: main
+        path: "{{ .path.path }}"
+        helm:
+          releaseName: "{{ .path.basename }}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: parcelpigeon # all charts share one namespace, so DNS names like `postgres` keep working
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

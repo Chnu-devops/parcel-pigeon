@@ -163,7 +163,7 @@ file, since the compose file only overrides a subset.
 
 ```bash
 kubectl create deployment gateway -n parcelpigeon \
-  --image=ghcr.io/rostyslavdiachuk/gateway:latest \
+  --image=ghcr.io/chnu-devops/gateway:latest \
   --dry-run=client -o yaml > k8s/gateway/deployment.yaml
 ```
 

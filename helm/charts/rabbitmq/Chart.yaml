@@ -1,0 +1,10 @@
+apiVersion: v2
+name: rabbitmq
+description: ParcelPigeon RabbitMQ — event bus between shipments and tracking
+type: application
+version: 0.1.0
+appVersion: "latest"
+dependencies:
+  - name: parcelpigeon-common
+    version: 0.1.0
+    repository: file://../../library/parcelpigeon-common

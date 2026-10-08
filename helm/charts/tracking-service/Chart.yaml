@@ -1,0 +1,10 @@
+apiVersion: v2
+name: tracking-service
+description: ParcelPigeon tracking-service — read side (Go, RabbitMQ consumer → Redis)
+type: application
+version: 0.1.0
+appVersion: "latest"
+dependencies:
+  - name: parcelpigeon-common
+    version: 0.1.0
+    repository: file://../../library/parcelpigeon-common

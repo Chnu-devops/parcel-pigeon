@@ -1,0 +1,22 @@
+# Default values for the shipments-service chart.
+
+image:
+  repository: ghcr.io/chnu-devops/shipments-service
+  tag: latest
+replicas: 1
+port: 8000
+config:
+  SHIPMENTS_RABBITMQ_EXCHANGE: "parcelpigeon"
+  SHIPMENTS_PUBLISH_EVENTS: "true"
+  SHIPMENTS_ETA_HOURS: "72"
+  SHIPMENTS_LOG_LEVEL: "INFO"
+secret:
+  SHIPMENTS_DATABASE_URL: postgresql+psycopg://parcelpigeon:parcelpigeon@postgres:5432/shipments
+  SHIPMENTS_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi

@@ -1,0 +1,10 @@
+apiVersion: v2
+name: postgres
+description: ParcelPigeon Postgres — shipments database
+type: application
+version: 0.1.0
+appVersion: "latest"
+dependencies:
+  - name: parcelpigeon-common
+    version: 0.1.0
+    repository: file://../../library/parcelpigeon-common

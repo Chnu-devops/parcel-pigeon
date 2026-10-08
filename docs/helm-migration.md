@@ -133,7 +133,7 @@ Add a block to `values.yaml` holding everything that was hardcoded in
 ```yaml
 gateway:
   image:
-    repository: ghcr.io/rostyslavdiachuk/gateway
+    repository: ghcr.io/chnu-devops/gateway
     tag: latest
   replicas: 1
   port: 8000

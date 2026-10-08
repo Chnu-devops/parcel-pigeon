@@ -1,5 +1,8 @@
 # Migrating from `helm upgrade` to GitOps with Argo CD — step by step
 
+> On the `add-split-charts` branch the single chart is split into one chart
+> and one Argo CD Application per service — see `docs/split-charts-migration.md`.
+
 This is the live-coding guide for handing the Helm chart from the `add-helm`
 branch (see `docs/helm-migration.md`) over to Argo CD. `git diff add-helm` on
 the `add-gitops` branch is the reference / answer key.
@@ -55,7 +58,7 @@ git push -u origin add-helm add-gitops
 ```
 
 The images must be pullable by minikube: the CI pushes them to
-`ghcr.io/rostyslavdiachuk/*`; make each GHCR package **public**
+`ghcr.io/chnu-devops/*`; make each GHCR package **public**
 (GitHub → Packages → *package* → Package settings → Change visibility),
 or add an `imagePullSecret`.
 
@@ -98,8 +101,8 @@ If it's private, give Argo CD a read-only token (fine-grained PAT with
 *Contents: read*):
 
 ```bash
-argocd repo add https://github.com/rostyslavdiachuk/parcel-pigeon.git \
-  --username rostyslavdiachuk --password <token>
+argocd repo add https://github.com/Chnu-devops/parcel-pigeon.git \
+  --username <your-github-user> --password <token>
 ```
 
 ## Step 3 — The chart as an Application
@@ -118,7 +121,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/rostyslavdiachuk/parcel-pigeon.git
+    repoURL: https://github.com/Chnu-devops/parcel-pigeon.git
     targetRevision: main
     path: helm/parcelpigeon
     helm:
@@ -175,7 +178,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/rostyslavdiachuk/parcel-pigeon.git
+    repoURL: https://github.com/Chnu-devops/parcel-pigeon.git
     targetRevision: main
     path: argocd/apps
   destination:
@@ -356,5 +359,6 @@ kubectl delete namespace argocd             # Argo CD itself
 An `AppProject` restricting repos/namespaces instead of `default`;
 per-environment values (`values-dev.yaml` / `values-prod.yaml`) with an
 `ApplicationSet`; Argo CD Image Updater instead of the CI commit; Argo
-Rollouts canaries; Sealed Secrets / External Secrets so the secrets in
+Rollouts canaries; one chart + Application per service
+(`docs/split-charts-migration.md`); Sealed Secrets / External Secrets so the secrets in
 `values.yaml` leave Git — see `docs/lecture-map.md`.
