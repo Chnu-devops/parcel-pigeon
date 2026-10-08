@@ -1,6 +1,6 @@
 # Moving deployment config to a separate GitOps repo — step by step
 
-> Next step, on the `add-environments` branch: dev / staging / prod overlays and
+> Next step, on the `add-environments` branch: dev / prod overlays and
 > promotion by PR — see `docs/environments-migration.md`.
 
 This is the guide for moving the charts and Argo CD manifests out of this

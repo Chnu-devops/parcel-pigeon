@@ -164,8 +164,8 @@ jobs:
             path: gitops
 
         # Point the dev overlay of each chart at the image just pushed; Argo CD
-        # rolls out only that service in dev. Staging and prod are promoted by
-        # PRs in the config repo (its promote.yml), never from here.
+        # rolls out only that service in dev. Prod is promoted by a PR in the
+        # config repo (its promote.yml), never from here.
         # A service is bumped only if its source changed since the commit its
         # tag points at now (or the tag isn't a commit yet, e.g. `latest`), so
         # an unrelated push doesn't restart it — and a cancelled run is caught up
