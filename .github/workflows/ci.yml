@@ -163,8 +163,9 @@ jobs:
             ssh-key: ${{ secrets.GITOPS_DEPLOY_KEY }}
             path: gitops
 
-        # Point each chart at the image just pushed; Argo CD notices the commit
-        # in the config repo and rolls out only that service.
+        # Point the dev overlay of each chart at the image just pushed; Argo CD
+        # rolls out only that service in dev. Staging and prod are promoted by
+        # PRs in the config repo (its promote.yml), never from here.
         # A service is bumped only if its source changed since the commit its
         # tag points at now (or the tag isn't a commit yet, e.g. `latest`), so
         # an unrelated push doesn't restart it — and a cancelled run is caught up
@@ -179,7 +180,7 @@ jobs:
             )
             bumped=()
             for svc in "${!src[@]}"; do
-              values="gitops/helm/charts/${svc}/values.yaml"
+              values="gitops/apps/${svc}/overlays/dev/values.yaml"
               current=$(yq '.image.tag' "$values")
               if git cat-file -e "${current}^{commit}" 2>/dev/null \
                 && git diff --quiet "$current" "$SHA" -- "${src[$svc]}"; then
@@ -198,7 +199,7 @@ jobs:
           run: |
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -am "deploy(${BUMPED}): ${SHA::7}" \
+            git commit -am "deploy(dev): ${BUMPED} ${SHA::7}" \
               -m "From ${{ github.server_url }}/${{ github.repository }}/commit/${SHA}"
             git pull --rebase origin main
             git push origin HEAD:main
