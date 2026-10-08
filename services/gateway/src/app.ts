@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import type { Config } from './config.js';
 import { metricsPlugin } from './plugins/metrics.js';
 
+//make some comment to bump version
 export async function buildApp(config: Config): Promise<FastifyInstance> {
   const app = Fastify({
     logger: { level: config.LOG_LEVEL },
