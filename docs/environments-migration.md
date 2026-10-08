@@ -1,5 +1,7 @@
 # dev → prod: environments in the config repo — step by step
 
+> Just want it running from scratch? See `docs/running-gitops.md`.
+
 This is the guide for turning the config repo
 [`Chnu-devops/parcel-pigeon-gitops`](https://github.com/Chnu-devops/parcel-pigeon-gitops)
 from "one environment" into a production-style layout with **dev and
