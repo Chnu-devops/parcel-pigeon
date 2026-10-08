@@ -1,0 +1,30 @@
+# ParcelPigeon: Argo CD renders helm/parcelpigeon from Git (`helm template`) and applies it.
+# Replaces running `helm upgrade --install` by hand.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: parcelpigeon
+  namespace: argocd
+  finalizers:
+    # Deleting this Application also deletes the resources it deployed
+    # (PVCs survive thanks to their `Delete=false` sync option).
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/rostyslavdiachuk/parcel-pigeon.git
+    targetRevision: main
+    path: helm/parcelpigeon
+    helm:
+      releaseName: parcelpigeon # same as the old `helm install` → same labels and checksums
+      valueFiles:
+        - values.yaml # image tags in here are bumped by CI on every push to main
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: parcelpigeon
+  syncPolicy:
+    automated:
+      prune: true    # resource removed from the chart → deleted from the cluster
+      selfHeal: true # `kubectl edit/scale` by hand → reverted to what Git says
+    syncOptions:
+      - CreateNamespace=true # replaces `helm install --create-namespace`

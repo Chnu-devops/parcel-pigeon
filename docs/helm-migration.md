@@ -404,3 +404,4 @@ kubectl -n parcelpigeon delete pvc --all      # only if you want the data gone
 
 `values-dev.yaml` / `values-prod.yaml` overlays, HPA/PDB, `ServiceMonitor`,
 and Argo CD reconciling this chart from Git — see `docs/lecture-map.md`.
+The Argo CD step is on the `add-gitops` branch: `docs/gitops-migration.md`.

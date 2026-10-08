@@ -1,0 +1,20 @@
+# App of apps: the only thing applied by hand (`kubectl apply -f argocd/root-app.yaml`).
+# It syncs every Application manifest in argocd/apps/, so adding an app = adding a file in Git.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/rostyslavdiachuk/parcel-pigeon.git
+    targetRevision: main
+    path: argocd/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd # child Application objects live next to Argo CD
+  syncPolicy:
+    automated:
+      prune: true    # an app file deleted from Git → its Application is deleted
+      selfHeal: true # an Application edited by hand → reverted to Git

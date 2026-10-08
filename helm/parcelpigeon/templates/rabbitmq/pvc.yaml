@@ -7,6 +7,8 @@ metadata:
   annotations:
     # Keep the data volume on `helm uninstall`.
     helm.sh/resource-policy: keep
+    # Same for Argo CD: keep the volume when the Application is deleted.
+    argocd.argoproj.io/sync-options: Delete=false
 spec:
   accessModes:
     - ReadWriteOnce

@@ -141,6 +141,40 @@ jobs:
               docker tag "local/${{ matrix.service }}:${{ github.sha }}" "${image}:latest"
               docker push "${image}:latest"
             fi
+  bump-image-tags:
+      name: gitops / bump image tags
+      needs: [build-and-publish]
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      runs-on: ubuntu-latest
+      permissions:
+        contents: write # push the values.yaml change back to main
+      env:
+        SHA: ${{ github.sha }}
+        VALUES: helm/parcelpigeon/values.yaml
+      steps:
+        - uses: actions/checkout@v4
+
+        # Git is the source of truth: point the chart at the images just pushed,
+        # Argo CD notices the commit and rolls them out.
+        - name: Set image tags to this commit
+          run: |
+            yq -i '
+              .gateway.image.tag = strenv(SHA) |
+              .web.image.tag = strenv(SHA) |
+              .shipmentsService.image.tag = strenv(SHA) |
+              .trackingService.image.tag = strenv(SHA)
+            ' "$VALUES"
+            git diff
+
+        # Pushes made with GITHUB_TOKEN don't trigger workflows, so this can't loop.
+        - name: Commit and push
+          run: |
+            git diff --quiet && exit 0
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -am "deploy: bump image tags to ${SHA::7} [skip ci]"
+            git pull --rebase origin main
+            git push origin HEAD:main
 ##
 #
 #
