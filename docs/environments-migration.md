@@ -330,13 +330,13 @@ Config repo settings (GitHub UI):
   Actions to create and approve pull requests*. In an organization this may
   also have to be allowed at org level first (**Chnu-devops → Settings →
   Actions → General**).
-- Pushes made with the CI **deploy key** trigger workflows (unlike pushes
+- Pushes made with the CI **GitHub App** token trigger workflows (unlike pushes
   made with `GITHUB_TOKEN`), so the app repo's dev bump is what kicks off
   `promote.yml`.
 
 Production-style hardening, optional for the sandbox:
 
-- Protect `main` with *Require a pull request* and add the CI deploy key as a
+- Protect `main` with *Require a pull request* and add the CI GitHub App as a
   bypass actor (it pushes dev bumps directly).
 - A `CODEOWNERS` line such as `*/*/overlays/prod/ @Chnu-devops/release-managers`
   plus *Require review from Code Owners*: only that team can approve prod.

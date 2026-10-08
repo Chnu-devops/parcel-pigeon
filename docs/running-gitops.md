@@ -49,16 +49,17 @@ Chnu-devops org, and about 6 GB of free memory for minikube.
 | --- | --- | --- |
 | minikube | the local cluster | `minikube version` |
 | kubectl | talking to the cluster | `kubectl version --client` |
-| git + ssh-keygen | pushing repos, making the CI deploy key | `git --version` |
+| git | pushing repos | `git --version` |
 | argocd CLI (optional) | logging in, refresh, history | `brew install argocd` |
 | helm (optional) | rendering charts locally before a push | `helm version` |
 
 On GitHub you need:
 
 - **Admin** on `Chnu-devops/parcel-pigeon` and `Chnu-devops/parcel-pigeon-gitops`,
-  to add secrets, deploy keys and change Actions settings.
-- **Org owner**, or an owner's help, if the org restricts public packages or
-  Actions-created pull requests (Step 2).
+  to add secrets and change Actions settings.
+- **Org owner**, or an owner's help, to create the org's GitHub App and org
+  secrets, and if the org restricts public packages or Actions-created pull
+  requests (Step 2).
 
 Locally you need the two repos with these branches:
 
@@ -105,23 +106,38 @@ Check: the config repo on GitHub shows `apps/`, `services/`, `lib/`,
 
 ## Step 2 — GitHub settings and the first CI run
 
-CI needs a deploy key to write to the config repo, the config repo must be
+CI needs a GitHub App to write to the config repo, the config repo must be
 allowed to open PRs, and the images CI pushes must be public so minikube can
 pull them.
 
-1. **Deploy key for CI.** Generate a key pair just for this:
+1. **A GitHub App for CI.** `GITHUB_TOKEN` can only write to the repo its
+   workflow runs in, and the Chnu-devops org disables deploy keys by policy.
+   An org-owned GitHub App is the replacement: installed on the config repo
+   only, with only *Contents: write*, and CI mints a token from it that
+   expires after an hour.
 
-   ```bash
-   ssh-keygen -t ed25519 -N '' -C "parcel-pigeon CI" -f /tmp/gitops_deploy_key
-   ```
+   1. **Chnu-devops → Settings → Developer settings → GitHub Apps → New GitHub App**:
+      - Name: `parcel-pigeon-gitops-bot` (must be unique on GitHub; add a suffix if taken)
+      - Homepage URL: `https://github.com/Chnu-devops/parcel-pigeon`
+      - Webhook: untick **Active**
+      - Repository permissions: **Contents → Read and write** (Metadata → Read-only is added automatically); nothing else
+      - Where can this app be installed: **Only on this account**
+      - **Create GitHub App**, then note the **App ID** at the top of its page.
+   2. On the app's page: **Private keys → Generate a private key**. A `.pem`
+      file downloads.
+   3. **Install App** (left menu) → **Chnu-devops** → **Only select
+      repositories → `parcel-pigeon-gitops`** → Install.
+   4. **Chnu-devops → Settings → Secrets and variables → Actions**, limit both
+      to the repo that runs the CI (**Repository access → Selected
+      repositories → `parcel-pigeon`**):
+      - **Variables** tab → New organization variable: `GITOPS_APP_ID` = the App ID.
+      - **Secrets** tab → New organization secret: `GITOPS_APP_PRIVATE_KEY` =
+        the whole content of the `.pem` file, `BEGIN`/`END` lines included.
+   5. Delete the downloaded `.pem`; GitHub can generate a new one any time.
 
-   - Config repo → **Settings → Deploy keys → Add deploy key**: paste
-     `/tmp/gitops_deploy_key.pub`, title `parcel-pigeon CI`, tick
-     **Allow write access**.
-   - App repo → **Settings → Secrets and variables → Actions → New repository
-     secret**: name `GITOPS_DEPLOY_KEY`, value = the whole content of
-     `/tmp/gitops_deploy_key` (the private key).
-   - Then delete both files: `rm /tmp/gitops_deploy_key /tmp/gitops_deploy_key.pub`.
+   On the GitHub Free plan, org secrets and variables aren't available to
+   **private** repos. If `parcel-pigeon` is private, create the same two as
+   repository secret/variable in `parcel-pigeon` instead.
 
 2. **Let the config repo open promotion PRs.** Config repo → **Settings →
    Actions → General → Workflow permissions** → tick *Allow GitHub Actions to
@@ -211,12 +227,18 @@ that isn't deployed from Git.
    kubectl -n argocd rollout restart deploy/argocd-repo-server statefulset/argocd-application-controller
    ```
 
-5. **Only if the config repo is private:** give Argo CD a read-only deploy key.
-   Generate a second key pair, add its `.pub` as a deploy key on the config
-   repo **without** write access, then run
-   `argocd repo add git@github.com:Chnu-devops/parcel-pigeon-gitops.git --ssh-private-key-path <private key>`.
-   Also switch every `repoURL` under `clusters/` to that `git@github.com:…`
-   form and push.
+5. **Only if the config repo is private:** give Argo CD read access with a
+   second GitHub App (installed on `parcel-pigeon-gitops`, *Contents:
+   Read-only*), since deploy keys are disabled in the org:
+
+   ```bash
+   argocd repo add https://github.com/Chnu-devops/parcel-pigeon-gitops.git \
+     --github-app-id <app id> --github-app-installation-id <installation id> \
+     --github-app-private-key-path <key.pem>
+   ```
+
+   The installation id is the number at the end of the URL on the app's
+   installation page.
 
 ## Step 5 — Bootstrap dev and prod
 
@@ -342,8 +364,10 @@ Most first-run failures are a GitHub setting or memory; find the symptom below.
 | No Applications appear after Step 5 | ApplicationSet can't read the repo (private, or wrong URL) | `kubectl -n argocd describe applicationset parcelpigeon-dev`; see Step 4.5 for private repos |
 | `web-prod` fails to sync: *host "parcelpigeon.local" … is already defined* | An older ParcelPigeon install still owns that host | Delete the old Ingress or its namespace (e.g. `kubectl delete namespace parcelpigeon`) |
 | `shipments-service` restarts a few times right after Step 5 | postgres or rabbitmq not ready yet | Expected; it settles. If it keeps failing: `kubectl -n parcelpigeon-dev logs deploy/shipments-service` |
-| *gitops / bump image tags* fails with *Permission denied (publickey)* | `GITOPS_DEPLOY_KEY` secret missing or wrong | Redo Step 2.1; the secret holds the **private** key |
-| Same job fails with *write access … not granted* | Deploy key added without write access | Re-add it with *Allow write access* ticked |
+| *gitops / bump image tags* fails at *create-github-app-token* with *Input required* | `GITOPS_APP_ID` variable or `GITOPS_APP_PRIVATE_KEY` secret missing, or not shared with `parcel-pigeon` | Step 2.1.4; check *Repository access* on both |
+| Same step fails with *Not Found* / no installation | App not installed on `parcel-pigeon-gitops` | Step 2.1.3 |
+| Push fails with *403 … denied to github-actions[bot]* | The workflow still uses `GITHUB_TOKEN` (old `ci.yml`) | Use the `ci.yml` with the `create-github-app-token` step |
+| Push fails with *403 … denied to <app>[bot]* | App lacks *Contents: write* | App settings → Permissions → Contents: Read and write, then accept the new permissions on the installation |
 | No *Promote dev → prod* PR appears | Actions not allowed to create PRs | Step 2.2, at org level too; then **Actions → Promote → Run workflow** |
 | A merged change isn't deployed yet | Argo CD polls Git every ~3 minutes | `argocd app get <app> --refresh`, or shorten polling (Step 4.4) |
 | `*.parcelpigeon.local` doesn't resolve or times out on macOS | No tunnel with the Docker driver | Run `minikube tunnel` and use `127.0.0.1` in `/etc/hosts` |
@@ -381,5 +405,5 @@ remove ParcelPigeon but keep the cluster and Argo CD.
    ```
 
 Finally, remove the two `*.parcelpigeon.local` names from `/etc/hosts`. The
-GitHub repos, deploy key and images are untouched; Step 3 onwards brings
+GitHub repos, the GitHub App and the images are untouched; Step 3 onwards brings
 everything back.

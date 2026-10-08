@@ -151,30 +151,22 @@ deleted.
 ## Step 3 — Give CI write access to the config repo
 
 `GITHUB_TOKEN` can only write to the repo the workflow runs in, so CI needs
-its own credential for the config repo. A **deploy key** is the narrowest
-one: one SSH key, valid for one repo, no expiry, no user attached.
+its own credential for the config repo. The options, narrowest first:
 
-```bash
-ssh-keygen -t ed25519 -N '' -C "parcel-pigeon CI" -f /tmp/gitops_deploy_key
-```
+| Credential | Scope | Tied to | Expires | In Chnu-devops |
+| --- | --- | --- | --- | --- |
+| deploy key (SSH) | one repo | nobody | never | **disabled by org policy** |
+| GitHub App | the repos it's installed on, only the permissions it asks for | the org | each token after 1 hour | **use this** |
+| fine-grained PAT | chosen repos | a person | at most 1 year | works, but leaves with that person |
 
-- **Config repo** → Settings → Deploy keys → *Add deploy key*: paste
-  `/tmp/gitops_deploy_key.pub`, title `parcel-pigeon CI`, tick
-  **Allow write access**.
-- **App repo** → Settings → Secrets and variables → Actions → *New repository
-  secret*: name `GITOPS_DEPLOY_KEY`, value = contents of
-  `/tmp/gitops_deploy_key` (the private key).
+So CI uses an **org-owned GitHub App**, installed only on
+`parcel-pigeon-gitops` with *Contents: Read and write*. The App ID goes in an
+org variable `GITOPS_APP_ID` and its private key in an org secret
+`GITOPS_APP_PRIVATE_KEY`, both shared only with `parcel-pigeon`. The
+click-by-click setup is Step 2.1 of `docs/running-gitops.md`.
 
-```bash
-rm /tmp/gitops_deploy_key /tmp/gitops_deploy_key.pub
-```
-
-If the config repo's `main` is protected, allow deploy keys to push (or add
-the key as a bypass actor in the ruleset).
-
-Alternative: a fine-grained PAT (resource owner `Chnu-devops`, only
-`parcel-pigeon-gitops`, *Contents: Read and write*) passed as `token:`
-instead of `ssh-key:`. It works, but it's tied to a person and expires.
+If the config repo's `main` gets a ruleset or branch protection, add the app
+to its bypass list: CI pushes dev deploys straight to `main`.
 
 ## Step 4 — Remove deploy config from the app repo, re-target CI
 
@@ -202,10 +194,17 @@ In `.github/workflows/ci.yml` the `bump-image-tags` job now checks out
         - uses: actions/checkout@v4
           with:
             fetch-depth: 0
+        - uses: actions/create-github-app-token@v2
+          id: gitops-token
+          with:
+            app-id: ${{ vars.GITOPS_APP_ID }}
+            private-key: ${{ secrets.GITOPS_APP_PRIVATE_KEY }}
+            owner: ${{ github.repository_owner }}
+            repositories: parcel-pigeon-gitops
         - uses: actions/checkout@v4
           with:
             repository: ${{ env.GITOPS_REPO }}
-            ssh-key: ${{ secrets.GITOPS_DEPLOY_KEY }}
+            token: ${{ steps.gitops-token.outputs.token }}
             path: gitops
         - name: Set image tags of changed services to this commit
           run: |
@@ -259,19 +258,17 @@ git revert --no-edit HEAD && git push
 
 ## Step 6 — Private config repo (optional)
 
-If `parcel-pigeon-gitops` is private, Argo CD needs read access. Use a second
-deploy key, **read-only** this time:
+If `parcel-pigeon-gitops` is private, Argo CD needs read access. Deploy
+keys are disabled in the org, so use a second GitHub App with *Contents:
+Read-only*, installed on the config repo:
 
 ```bash
-ssh-keygen -t ed25519 -N '' -C "argocd" -f /tmp/argocd_key
-# config repo → Deploy keys → add /tmp/argocd_key.pub (no write access)
-argocd repo add git@github.com:Chnu-devops/parcel-pigeon-gitops.git \
-  --ssh-private-key-path /tmp/argocd_key
-rm /tmp/argocd_key /tmp/argocd_key.pub
+argocd repo add https://github.com/Chnu-devops/parcel-pigeon-gitops.git \
+  --github-app-id <app id> --github-app-installation-id <installation id> \
+  --github-app-private-key-path <key.pem>
 ```
 
-and switch the three `repoURL`s in `argocd/` to the
-`git@github.com:Chnu-devops/parcel-pigeon-gitops.git` form.
+The `repoURL`s stay in their `https://` form.
 
 Also make sure the GHCR packages under `chnu-devops` are public (or add an
 `imagePullSecret`): images now live at `ghcr.io/chnu-devops/*` because CI

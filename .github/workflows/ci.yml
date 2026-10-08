@@ -155,12 +155,23 @@ jobs:
             fetch-depth: 0 # full history, to diff against the currently deployed commit
 
         # The config repo is the only repo Argo CD reads. GITHUB_TOKEN can't
-        # write to another repo, so this uses a deploy key with write access
-        # on parcel-pigeon-gitops (private key stored as a secret here).
+        # write to another repo, so this mints a short-lived token from the
+        # org's GitHub App, installed only on parcel-pigeon-gitops with
+        # Contents: read & write. (Org policy disables deploy keys.)
+        # Unlike GITHUB_TOKEN pushes, its pushes trigger the config repo's
+        # promote.yml.
+        - uses: actions/create-github-app-token@v2
+          id: gitops-token
+          with:
+            app-id: ${{ vars.GITOPS_APP_ID }}
+            private-key: ${{ secrets.GITOPS_APP_PRIVATE_KEY }}
+            owner: ${{ github.repository_owner }}
+            repositories: parcel-pigeon-gitops
+
         - uses: actions/checkout@v4
           with:
             repository: ${{ env.GITOPS_REPO }}
-            ssh-key: ${{ secrets.GITOPS_DEPLOY_KEY }}
+            token: ${{ steps.gitops-token.outputs.token }}
             path: gitops
 
         # Point the dev overlay of each chart at the image just pushed; Argo CD
