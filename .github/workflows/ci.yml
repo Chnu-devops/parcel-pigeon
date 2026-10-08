@@ -141,6 +141,68 @@ jobs:
               docker tag "local/${{ matrix.service }}:${{ github.sha }}" "${image}:latest"
               docker push "${image}:latest"
             fi
+  bump-image-tags:
+      name: gitops / bump image tags
+      needs: [build-and-publish]
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      runs-on: ubuntu-latest
+      env:
+        SHA: ${{ github.sha }}
+        GITOPS_REPO: Chnu-devops/parcel-pigeon-gitops
+      steps:
+        - uses: actions/checkout@v4
+          with:
+            fetch-depth: 0 # full history, to diff against the currently deployed commit
+
+        # The config repo is the only repo Argo CD reads. GITHUB_TOKEN can't
+        # write to another repo, so this uses a deploy key with write access
+        # on parcel-pigeon-gitops (private key stored as a secret here).
+        - uses: actions/checkout@v4
+          with:
+            repository: ${{ env.GITOPS_REPO }}
+            ssh-key: ${{ secrets.GITOPS_DEPLOY_KEY }}
+            path: gitops
+
+        # Point the dev overlay of each chart at the image just pushed; Argo CD
+        # rolls out only that service in dev. Prod is promoted by a PR in the
+        # config repo (its promote.yml), never from here.
+        # A service is bumped only if its source changed since the commit its
+        # tag points at now (or the tag isn't a commit yet, e.g. `latest`), so
+        # an unrelated push doesn't restart it — and a cancelled run is caught up
+        # by the next one.
+        - name: Set image tags of changed services to this commit
+          run: |
+            declare -A src=(
+              [gateway]=services/gateway
+              [web]=web
+              [shipments-service]=services/shipments-service
+              [tracking-service]=services/tracking-service
+            )
+            bumped=()
+            for svc in "${!src[@]}"; do
+              values="gitops/apps/${svc}/overlays/dev/values.yaml"
+              current=$(yq '.image.tag' "$values")
+              if git cat-file -e "${current}^{commit}" 2>/dev/null \
+                && git diff --quiet "$current" "$SHA" -- "${src[$svc]}"; then
+                echo "${svc}: unchanged since ${current::7}"
+                continue
+              fi
+              yq -i '.image.tag = strenv(SHA)' "$values"
+              echo "${svc}: -> ${SHA::7}"
+              bumped+=("$svc")
+            done
+            echo "BUMPED=$(IFS=,; echo "${bumped[*]}")" >> "$GITHUB_ENV"
+
+        - name: Commit and push to the config repo
+          if: env.BUMPED != ''
+          working-directory: gitops
+          run: |
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -am "deploy(dev): ${BUMPED} ${SHA::7}" \
+              -m "From ${{ github.server_url }}/${{ github.repository }}/commit/${SHA}"
+            git pull --rebase origin main
+            git push origin HEAD:main
 ##
 #
 #

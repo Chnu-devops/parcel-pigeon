@@ -133,7 +133,7 @@ Add a block to `values.yaml` holding everything that was hardcoded in
 ```yaml
 gateway:
   image:
-    repository: ghcr.io/rostyslavdiachuk/gateway
+    repository: ghcr.io/chnu-devops/gateway
     tag: latest
   replicas: 1
   port: 8000
@@ -404,3 +404,4 @@ kubectl -n parcelpigeon delete pvc --all      # only if you want the data gone
 
 `values-dev.yaml` / `values-prod.yaml` overlays, HPA/PDB, `ServiceMonitor`,
 and Argo CD reconciling this chart from Git — see `docs/lecture-map.md`.
+The Argo CD step is on the `add-gitops` branch: `docs/gitops-migration.md`.
