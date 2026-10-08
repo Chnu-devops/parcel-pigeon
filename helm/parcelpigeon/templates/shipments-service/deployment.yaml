@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shipments-service
+  labels:
+    {{- include "parcelpigeon.labels" (dict "name" "shipments-service" "ctx" $) | nindent 4 }}
+spec:
+  replicas: {{ .Values.shipmentsService.replicas }}
+  selector:
+    matchLabels:
+      {{- include "parcelpigeon.selectorLabels" "shipments-service" | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "parcelpigeon.labels" (dict "name" "shipments-service" "ctx" $) | nindent 8 }}
+      annotations:
+        # Roll the pods whenever the rendered ConfigMap/Secret changes.
+        checksum/config: {{ include (print $.Template.BasePath "/shipments-service/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/shipments-service/secret.yaml") . | sha256sum }}
+    spec:
+      containers:
+        - name: shipments-service
+          image: "{{ .Values.shipmentsService.image.repository }}:{{ .Values.shipmentsService.image.tag }}"
+          ports:
+            - containerPort: {{ .Values.shipmentsService.port }}
+          envFrom:
+            - configMapRef:
+                name: shipments-service-config
+            - secretRef:
+                name: shipments-service-secret
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: {{ .Values.shipmentsService.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.shipmentsService.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.shipmentsService.resources | nindent 12 }}

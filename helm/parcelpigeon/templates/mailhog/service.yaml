@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailhog
+  labels:
+    {{- include "parcelpigeon.labels" (dict "name" "mailhog" "ctx" $) | nindent 4 }}
+spec:
+  selector:
+    {{- include "parcelpigeon.selectorLabels" "mailhog" | nindent 4 }}
+  ports:
+    {{- range $name, $port := .Values.mailhog.ports }}
+    - name: {{ $name }}
+      port: {{ $port }}
+      targetPort: {{ $port }}
+    {{- end }}
