@@ -1,5 +1,8 @@
 # Splitting the umbrella chart into one chart per service — step by step
 
+> On the `add-config-repo` branch `helm/` and `argocd/` move to the separate
+> config repo `Chnu-devops/parcel-pigeon-gitops` — see `docs/config-repo-migration.md`.
+
 This is the live-coding guide for turning the single `helm/parcelpigeon`
 chart from the `add-gitops` branch (see `docs/gitops-migration.md`) into one
 chart per component, each deployed by its own Argo CD Application.

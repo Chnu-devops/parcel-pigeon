@@ -1,5 +1,8 @@
 # Migrating from `helm upgrade` to GitOps with Argo CD — step by step
 
+> On the `add-config-repo` branch `helm/` and `argocd/` move to the separate
+> config repo `Chnu-devops/parcel-pigeon-gitops` — see `docs/config-repo-migration.md`.
+
 > On the `add-split-charts` branch the single chart is split into one chart
 > and one Argo CD Application per service — see `docs/split-charts-migration.md`.
 

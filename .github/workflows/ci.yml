@@ -146,17 +146,25 @@ jobs:
       needs: [build-and-publish]
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       runs-on: ubuntu-latest
-      permissions:
-        contents: write # push the values.yaml changes back to main
       env:
         SHA: ${{ github.sha }}
+        GITOPS_REPO: Chnu-devops/parcel-pigeon-gitops
       steps:
         - uses: actions/checkout@v4
           with:
             fetch-depth: 0 # full history, to diff against the currently deployed commit
 
-        # Git is the source of truth: point each chart at the image just pushed,
-        # Argo CD notices the commit and rolls out only that service.
+        # The config repo is the only repo Argo CD reads. GITHUB_TOKEN can't
+        # write to another repo, so this uses a deploy key with write access
+        # on parcel-pigeon-gitops (private key stored as a secret here).
+        - uses: actions/checkout@v4
+          with:
+            repository: ${{ env.GITOPS_REPO }}
+            ssh-key: ${{ secrets.GITOPS_DEPLOY_KEY }}
+            path: gitops
+
+        # Point each chart at the image just pushed; Argo CD notices the commit
+        # in the config repo and rolls out only that service.
         # A service is bumped only if its source changed since the commit its
         # tag points at now (or the tag isn't a commit yet, e.g. `latest`), so
         # an unrelated push doesn't restart it — and a cancelled run is caught up
@@ -169,8 +177,9 @@ jobs:
               [shipments-service]=services/shipments-service
               [tracking-service]=services/tracking-service
             )
+            bumped=()
             for svc in "${!src[@]}"; do
-              values="helm/charts/${svc}/values.yaml"
+              values="gitops/helm/charts/${svc}/values.yaml"
               current=$(yq '.image.tag' "$values")
               if git cat-file -e "${current}^{commit}" 2>/dev/null \
                 && git diff --quiet "$current" "$SHA" -- "${src[$svc]}"; then
@@ -179,16 +188,18 @@ jobs:
               fi
               yq -i '.image.tag = strenv(SHA)' "$values"
               echo "${svc}: -> ${SHA::7}"
+              bumped+=("$svc")
             done
-            git diff
+            echo "BUMPED=$(IFS=,; echo "${bumped[*]}")" >> "$GITHUB_ENV"
 
-        # Pushes made with GITHUB_TOKEN don't trigger workflows, so this can't loop.
-        - name: Commit and push
+        - name: Commit and push to the config repo
+          if: env.BUMPED != ''
+          working-directory: gitops
           run: |
-            git diff --quiet && exit 0
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -am "deploy: bump image tags to ${SHA::7} [skip ci]"
+            git commit -am "deploy(${BUMPED}): ${SHA::7}" \
+              -m "From ${{ github.server_url }}/${{ github.repository }}/commit/${SHA}"
             git pull --rebase origin main
             git push origin HEAD:main
 ##

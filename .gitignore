@@ -29,6 +29,3 @@ build/
 # instructor's private cheat sheet for the containerisation live-coding session
 # (companion to this branch — never commit it)
 DOCKER-RESTORE-CHEATSHEET.md
-
-# helm dependency build output (Argo CD rebuilds it from Chart.lock)
-helm/charts/*/charts/

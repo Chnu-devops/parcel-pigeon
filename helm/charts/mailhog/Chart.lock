@@ -1,6 +1,0 @@
-dependencies:
-- name: parcelpigeon-common
-  repository: file://../../library/parcelpigeon-common
-  version: 0.1.0
-digest: sha256:6e7f502a283e58baedbf392062c8c2626770fe295c40eaa5d5f6e32a330b6341
-generated: "2026-10-08T10:51:39.55205+03:00"

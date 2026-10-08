@@ -1,5 +1,0 @@
-apiVersion: v2
-name: parcelpigeon-common
-description: Shared named templates (labels) for the ParcelPigeon charts
-type: library
-version: 0.1.0
