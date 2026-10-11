@@ -248,6 +248,8 @@ cluster comes from the config repo's `main`.
 ```bash
 cd ~/Developer/parcel-pigeon-gitops
 git pull                                   # includes CI's deploy(dev) commit
+kubectl apply -f clusters/platform/root.yaml   # Argo Rollouts — its CRDs must exist before gateway/web sync
+kubectl -n argocd get application argo-rollouts -w              # wait for Synced / Healthy
 kubectl apply -f clusters/dev/root.yaml -f clusters/prod/root.yaml
 kubectl -n argocd get applications -L env,tier -w
 ```
@@ -274,7 +276,7 @@ Merging the open *Promote dev → prod* PR pins prod to the same SHAs as dev.
 
 ## Step 6 — Check it works
 
-Everything is up when all 18 Applications are *Synced* and *Healthy* and both
+Everything is up when all 20 Applications (incl. `cluster-platform`, `argo-rollouts`) are *Synced* and *Healthy* and both
 hostnames answer.
 
 1. **Argo CD:**
@@ -380,7 +382,7 @@ remove ParcelPigeon but keep the cluster and Argo CD.
 1. Delete the roots first; otherwise they recreate the ApplicationSets within seconds:
 
    ```bash
-   kubectl -n argocd delete application cluster-dev cluster-prod
+   kubectl -n argocd delete application cluster-dev cluster-prod cluster-platform
    ```
 
 2. Delete the ApplicationSets. Their 16 Applications go with them, and the
