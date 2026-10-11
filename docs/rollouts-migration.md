@@ -295,9 +295,11 @@ rolling update, and blue-green never mixes them.
 ## Step 6 — Cut over
 
 Order matters. The Rollout CRD has to exist **before** Argo CD syncs the new
-gateway and web charts. If it doesn't, those syncs fail with *the server could
-not find the requested resource*, and automated sync does not retry a failed
-commit by itself.
+gateway and web charts. If it doesn't, the whole sync is rejected (*one or more
+synchronization tasks are not valid: Rollout.argoproj.io "" not found*), and
+nothing from it is applied. In the UI that looks like *Resource not found in
+cluster: v1/Service:web-preview*. The old Deployments keep serving, and Argo
+CD retries with backoff, so the apps fix themselves once the CRDs exist.
 
 ```bash
 # 1. merge add-rollouts into main in the config repo, then right away:
@@ -306,7 +308,7 @@ kubectl -n argocd get application cluster-platform argo-rollouts -w   # until Sy
 kubectl get crd rollouts.argoproj.io
 kubectl -n argo-rollouts get pods
 
-# 2. if gateway-* / web-* already tried and failed, sync them again now
+# 2. gateway-* / web-* pick it up on their next retry; to skip the wait:
 argocd app sync gateway-dev gateway-prod web-dev web-prod
 #   (or Argo CD UI → app → Sync)
 ```
@@ -428,7 +430,7 @@ To see the **analysis** fail (rather than readiness), use the samples:
 | gateway prod sits *Suspended* for hours | `pause: {}` waits for a person. Use `pause: {duration: 10m}` if nobody is on call |
 | Canary gets more or less traffic than `setWeight` | No traffic router: share = pods. 50% of 2 replicas is exact, 10% of 2 is not (it rounds up to 1 pod = 50%) |
 | `web-prod` uses twice the pods during a release | Blue-green runs both versions at full size until the switch, plus `scaleDownDelaySeconds` (`previewReplicaCount` reduces this) |
-| `gateway-*` failed with *could not find the requested resource* after the merge | Controller/CRDs not installed yet: Step 6 order, then sync again |
+| After the merge, `gateway-*` / `web-*` are OutOfSync with *Rollout.argoproj.io "" not found* or *Resource not found in cluster: v1/Service:web-preview* | Controller/CRDs not installed yet: `kubectl apply -f clusters/platform/root.yaml` (Step 6); the apps recover on their next retry |
 | After an abort, the app is still Degraded | Expected until Git changes: revert, or fix forward |
 
 ## Samples
