@@ -39,7 +39,7 @@ the later phases live during the lectures — that is the point of the sandbox.
 | **Kubernetes** | `deploy/k8s/`: Deployment/Service/Ingress/HPA/PDB, liveness=`/healthz`, readiness=`/readyz`, `ServiceMonitor` for the metrics. Local cluster on minikube. |
 | **Helm** | `helm/parcelpigeon` single chart (done on `add-helm`, see `docs/helm-migration.md`). Later: `values-dev.yaml` / `values-prod.yaml`. |
 | **GitOps (Argo CD)** | Argo CD `Application` (app-of-apps) reconciling the Helm chart from Git; CI bumps the image tag in the values file. Argo UI for the demo. |
-| **Progressive delivery** | Argo Rollouts canary on `gateway`, driven by the Prometheus success-rate metric. |
+| **Progressive delivery** | Done on `add-rollouts` (see `docs/rollouts-migration.md`): Argo Rollouts canary on `gateway` checked by a `/readyz` web analysis, blue-green on `web`, manual promote in prod, examples in the config repo's `samples/rollouts/`. Later: drive the canary with the Prometheus success-rate metric. |
 | **IDP / Backstage** | `catalog-info.yaml` per service, System/Domain descriptors, TechDocs (mkdocs from `docs/`), a Scaffolder "new service" template — demoed by adding a 4th backend, a **Rust (axum) ETA service** backed by Redis, as the golden path. |
 | **Secrets management** | Replace `.env` with Sealed Secrets / External Secrets + a vault; show the `GATEWAY_API_KEY` flowing through. |
 
