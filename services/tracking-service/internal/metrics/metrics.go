@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -40,14 +41,30 @@ func (r *statusRecorder) WriteHeader(code int) {
 	r.ResponseWriter.WriteHeader(code)
 }
 
-// Middleware records RED metrics. Pass a stable route label (e.g. "/track/{tn}")
-// rather than the raw path to keep cardinality bounded.
+// Middleware records RED metrics and writes one access-log line per request
+// (with the gateway's x-request-id) to slog's default logger. Pass a stable
+// route label (e.g. "/track/{tn}") rather than the raw path to keep
+// cardinality bounded.
 func Middleware(route string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rec := &statusRecorder{ResponseWriter: w, status: 200}
 		start := time.Now()
 		next(rec, r)
-		latency.WithLabelValues(r.Method, route).Observe(time.Since(start).Seconds())
+		elapsed := time.Since(start)
+		latency.WithLabelValues(r.Method, route).Observe(elapsed.Seconds())
 		requests.WithLabelValues(r.Method, route, strconv.Itoa(rec.status)).Inc()
+
+		level := slog.LevelInfo
+		if rec.status >= 500 {
+			level = slog.LevelError
+		}
+		slog.Log(r.Context(), level, "request completed",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"route", route,
+			"status", rec.status,
+			"duration_ms", float64(elapsed.Microseconds())/1000,
+			"request_id", r.Header.Get("X-Request-Id"),
+		)
 	}
 }

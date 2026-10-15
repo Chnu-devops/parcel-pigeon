@@ -1,18 +1,17 @@
 from __future__ import annotations
 
-import logging
-
 from fastapi import FastAPI
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from starlette.responses import Response
 
 from app.broker import close as close_broker
 from app.config import get_settings
+from app.logs import setup_logging
 from app.metrics import MetricsMiddleware
 from app.routers import health, shipments
 
 settings = get_settings()
-logging.basicConfig(level=settings.log_level)
+setup_logging(settings.log_level)
 
 app = FastAPI(title="ParcelPigeon shipments-service", version="0.1.0")
 app.add_middleware(MetricsMiddleware)

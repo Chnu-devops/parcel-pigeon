@@ -20,6 +20,7 @@ import (
 
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(log) // the metrics middleware writes access logs through it
 	cfg := config.Load()
 
 	rdb := store.NewRedisStore(cfg.RedisAddr)

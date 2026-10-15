@@ -8,6 +8,8 @@ const schema = z.object({
   // When set, non-GET /api requests must carry this value in x-api-key.
   GATEWAY_API_KEY: z.string().optional(),
   LOG_LEVEL: z.string().default('info'),
+  // Fault injection for demos: share (0..1) of /api requests answered with 500.
+  ERROR_RATE: z.coerce.number().min(0).max(1).default(0),
 });
 
 export type Config = z.infer<typeof schema>;

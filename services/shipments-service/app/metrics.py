@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 
 from prometheus_client import Counter, Histogram
@@ -15,6 +16,8 @@ LATENCY = Histogram(
     "HTTP request latency",
     ["method", "path"],
 )
+access_log = logging.getLogger("shipments.access")
+
 SHIPMENTS_CREATED = Counter("shipments_created_total", "Shipments created")
 STATUS_CHANGED = Counter(
     "shipment_status_changed_total", "Shipment status changes", ["status"]
@@ -25,7 +28,8 @@ EVENTS_PUBLISHED = Counter(
 
 
 class MetricsMiddleware:
-    """Tiny ASGI middleware recording RED metrics keyed by route template."""
+    """Tiny ASGI middleware: RED metrics keyed by route template + one access-log
+    line per request, carrying the gateway's x-request-id."""
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -49,5 +53,21 @@ class MetricsMiddleware:
         finally:
             route = scope.get("route")
             path = getattr(route, "path", scope["path"])
-            LATENCY.labels(method, path).observe(time.perf_counter() - start)
-            REQUESTS.labels(method, path, str(status_holder["code"])).inc()
+            elapsed = time.perf_counter() - start
+            status = status_holder["code"]
+            LATENCY.labels(method, path).observe(elapsed)
+            REQUESTS.labels(method, path, str(status)).inc()
+            if path != "/metrics":
+                headers = dict(scope.get("headers") or [])
+                access_log.log(
+                    logging.ERROR if status >= 500 else logging.INFO,
+                    "request completed",
+                    extra={
+                        "method": method,
+                        "path": scope["path"],
+                        "route": path,
+                        "status": status,
+                        "duration_ms": round(elapsed * 1000, 1),
+                        "request_id": headers.get(b"x-request-id", b"").decode() or None,
+                    },
+                )

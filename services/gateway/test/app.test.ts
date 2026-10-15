@@ -11,7 +11,8 @@ async function startStubs(): Promise<{ url: string; stop: () => Promise<void>; h
   stub.all('/*', async (req) => {
     hits.push(`${req.method} ${req.url}`);
     if (req.url === '/healthz') return { status: 'ok' };
-    if (req.url.startsWith('/shipments')) return { proxied: 'shipments', url: req.url };
+    if (req.url.startsWith('/shipments'))
+      return { proxied: 'shipments', url: req.url, requestId: req.headers['x-request-id'] };
     if (req.url.startsWith('/track')) return { proxied: 'tracking', url: req.url };
     if (req.url.startsWith('/notifications')) return [{ to: 'ada@example.com' }];
     return { ok: true };
@@ -25,6 +26,7 @@ describe('gateway', () => {
   let stubs: Awaited<ReturnType<typeof startStubs>>;
   let app: FastifyInstance;
   let appWithAuth: FastifyInstance;
+  let appFaulty: FastifyInstance;
 
   beforeAll(async () => {
     stubs = await startStubs();
@@ -35,11 +37,13 @@ describe('gateway', () => {
     } as NodeJS.ProcessEnv;
     app = await buildApp(loadConfig(base));
     appWithAuth = await buildApp(loadConfig({ ...base, GATEWAY_API_KEY: 'secret' }));
+    appFaulty = await buildApp(loadConfig({ ...base, ERROR_RATE: '1' }));
   });
 
   afterAll(async () => {
     await app.close();
     await appWithAuth.close();
+    await appFaulty.close();
     await stubs.stop();
   });
 
@@ -58,6 +62,18 @@ describe('gateway', () => {
   it('returns a x-request-id header', async () => {
     const res = await app.inject({ method: 'GET', url: '/healthz' });
     expect(res.headers['x-request-id']).toBeTruthy();
+  });
+
+  it('forwards the request id to upstreams', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/shipments' });
+    expect(res.json().requestId).toBe(res.headers['x-request-id']);
+  });
+
+  it('fails /api calls when ERROR_RATE=1 but keeps probes healthy', async () => {
+    const api = await appFaulty.inject({ method: 'GET', url: '/api/shipments' });
+    expect(api.statusCode).toBe(500);
+    const health = await appFaulty.inject({ method: 'GET', url: '/healthz' });
+    expect(health.statusCode).toBe(200);
   });
 
   it('aggregates upstream health in /readyz', async () => {

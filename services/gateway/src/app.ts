@@ -2,10 +2,10 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import httpProxy from '@fastify/http-proxy';
 import { randomUUID } from 'node:crypto';
+import type { IncomingHttpHeaders } from 'node:http';
 import type { Config } from './config.js';
 import { metricsPlugin } from './plugins/metrics.js';
 
-//make some comment to bump version
 export async function buildApp(config: Config): Promise<FastifyInstance> {
   const app = Fastify({
     logger: { level: config.LOG_LEVEL },
@@ -19,6 +19,16 @@ export async function buildApp(config: Config): Promise<FastifyInstance> {
   // Propagate the request id back to the caller and down to upstreams.
   app.addHook('onRequest', async (req, reply) => {
     reply.header('x-request-id', req.id);
+  });
+
+  // Fault switch (ERROR_RATE): fail a share of /api calls on purpose, so a
+  // "bad release" shows up in metrics, alerts and the canary analysis.
+  // Probes and /metrics are never touched — the pod itself stays healthy.
+  app.addHook('onRequest', async (req, reply) => {
+    if (config.ERROR_RATE <= 0 || !req.url.startsWith('/api/')) return;
+    if (Math.random() >= config.ERROR_RATE) return;
+    req.log.error({ errorRate: config.ERROR_RATE }, 'injected fault');
+    return reply.code(500).send({ error: 'injected fault (ERROR_RATE)' });
   });
 
   // Stub auth: guard mutating calls only. A real gateway would verify a JWT here.
@@ -54,22 +64,34 @@ export async function buildApp(config: Config): Promise<FastifyInstance> {
     return { ready, checks };
   });
 
+  // Send our request id upstream too (also when we generated it), so one id
+  // finds the same request in the logs of every service.
+  const replyOptions = {
+    rewriteRequestHeaders: (req: { id: string }, headers: IncomingHttpHeaders) => ({
+      ...headers,
+      'x-request-id': req.id,
+    }),
+  };
+
   // Edge -> service routing. Each upstream keeps its own path space; the gateway
   // just strips the /api/<area> prefix.
   await app.register(httpProxy, {
     upstream: config.SHIPMENTS_URL,
     prefix: '/api/shipments',
     rewritePrefix: '/shipments',
+    replyOptions,
   });
   await app.register(httpProxy, {
     upstream: config.TRACKING_URL,
     prefix: '/api/track',
     rewritePrefix: '/track',
+    replyOptions,
   });
   await app.register(httpProxy, {
     upstream: config.TRACKING_URL,
     prefix: '/api/notifications',
     rewritePrefix: '/notifications',
+    replyOptions,
   });
 
   return app;

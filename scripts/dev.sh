@@ -10,6 +10,7 @@
 #   ./scripts/dev.sh migrate        alembic upgrade head (shipments-service)
 #   ./scripts/dev.sh seed [--force] load demo shipments (shipments-service)
 #   ./scripts/dev.sh smoke          run the end-to-end smoke test
+#   ./scripts/dev.sh load           k6 load test (BASE_URL, VUS, DURATION) — see scripts/load.js
 #   ./scripts/dev.sh logs [svc]     tail datastore logs
 #   ./scripts/dev.sh ps             datastore container status
 set -euo pipefail
@@ -89,6 +90,30 @@ cmd_smoke() {
     ./scripts/smoke.sh
 }
 
+# k6 from the host if installed, otherwise the grafana/k6 image. Inside the
+# container the Mac's /etc/hosts is unknown, so the BASE_URL host is mapped
+# explicitly (127.0.0.1 — e.g. with `minikube tunnel` — becomes the host itself).
+cmd_load() {
+  local base="${BASE_URL:-http://dev.parcelpigeon.local}"
+  if command -v k6 >/dev/null 2>&1; then
+    BASE_URL="$base" k6 run scripts/load.js
+    return
+  fi
+  local host ip
+  host="$(echo "$base" | sed -E 's#^[a-z]+://([^/:]+).*#\1#')"
+  if [ "$host" = "localhost" ]; then
+    base="${base/localhost/host.docker.internal}"
+    host="host.docker.internal"
+  fi
+  ip="$(dscacheutil -q host -a name "$host" 2>/dev/null | awk '/^ip_address/{print $2; exit}')"
+  [ -n "$ip" ] || ip="$(getent hosts "$host" 2>/dev/null | awk '{print $1; exit}')"
+  case "$ip" in ""|127.*) ip="host-gateway" ;; esac
+  docker run --rm -i --add-host "${host}:${ip}" \
+    -e "BASE_URL=${base}" -e "VUS=${VUS:-5}" -e "DURATION=${DURATION:-5m}" \
+    -e "GATEWAY_API_KEY=${GATEWAY_API_KEY:-}" \
+    grafana/k6 run - < scripts/load.js
+}
+
 cmd_logs() { $DC logs -f --tail=100 "${1:-}"; }
 cmd_ps() { $DC ps; }
 
@@ -99,6 +124,7 @@ case "${1:-}" in
   migrate) cmd_migrate ;;
   seed)    shift; cmd_seed "${1:-}" ;;
   smoke)   cmd_smoke ;;
+  load)    cmd_load ;;
   logs)    shift; cmd_logs "${1:-}" ;;
   ps)      cmd_ps ;;
   *)

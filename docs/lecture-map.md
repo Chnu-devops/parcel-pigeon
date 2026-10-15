@@ -33,13 +33,13 @@ the later phases live during the lectures — that is the point of the sandbox.
 |-------|------|
 | **CI (GitHub Actions)** | `.github/workflows/`: per-service matrix (lint → test → build), image push to GHCR, then image scan gate. Nothing in the repo assumes a CI system yet. |
 | **Supply-chain / security scanning** | `hadolint` on Dockerfiles, `gitleaks`, `trivy fs` + `trivy image`, `syft` SBOM, optional `semgrep`. Wire into CI and as a `dev.sh scan` target. |
-| **Metrics platform** | Add `prometheus` + `grafana` + `alertmanager` compose services (or a `docker-compose.observability.yml`). Scrape configs point at the existing `/metrics`. Dashboards + alert rules as code. |
-| **Distributed tracing** | OpenTelemetry SDK in each service → OTel Collector → Jaeger/Tempo. The `x-request-id` the gateway already sets becomes the correlation seed. |
-| **Centralised logs** | Structured JSON logs are already emitted (pino, slog, uvicorn). Add Loki + Promtail / Alloy. |
+| **Metrics platform** | Done on `add-observability` (see `docs/observability-migration.md`): kube-prometheus-stack via Argo CD (`clusters/platform/`), a `ServiceMonitor` + `PrometheusRule` per service chart, the shared "ParcelPigeon RED" Grafana dashboard as a ConfigMap, `./scripts/dev.sh load` (k6) for traffic. Later: an Alertmanager receiver (Telegram), SLO recording rules. |
+| **Distributed tracing** | Later: OpenTelemetry SDK in each service → OTel Collector / Alloy → Tempo, `trace_id` in the logs. Until then the `x-request-id` the gateway now forwards to every upstream is the correlation id in Loki. |
+| **Centralised logs** | Done on `add-observability`: Loki + Grafana Alloy via Argo CD; all three services log one JSON line per request with `request_id` (shipments-service switched from plain text to JSON). |
 | **Kubernetes** | `deploy/k8s/`: Deployment/Service/Ingress/HPA/PDB, liveness=`/healthz`, readiness=`/readyz`, `ServiceMonitor` for the metrics. Local cluster on minikube. |
 | **Helm** | `helm/parcelpigeon` single chart (done on `add-helm`, see `docs/helm-migration.md`). Later: `values-dev.yaml` / `values-prod.yaml`. |
 | **GitOps (Argo CD)** | Argo CD `Application` (app-of-apps) reconciling the Helm chart from Git; CI bumps the image tag in the values file. Argo UI for the demo. |
-| **Progressive delivery** | Done on `add-rollouts` (see `docs/rollouts-migration.md`): Argo Rollouts canary on `gateway` checked by a `/readyz` web analysis, blue-green on `web`, manual promote in prod, examples in the config repo's `samples/rollouts/`. Later: drive the canary with the Prometheus success-rate metric. |
+| **Progressive delivery** | Done on `add-rollouts` (see `docs/rollouts-migration.md`): Argo Rollouts canary on `gateway` checked by a `/readyz` web analysis, blue-green on `web`, manual promote in prod, examples in the config repo's `samples/rollouts/`. On `add-observability` the canary also runs a Prometheus success-rate analysis, with an `ERROR_RATE` fault switch in the gateway for a bad-release demo. |
 | **IDP / Backstage** | `catalog-info.yaml` per service, System/Domain descriptors, TechDocs (mkdocs from `docs/`), a Scaffolder "new service" template — demoed by adding a 4th backend, a **Rust (axum) ETA service** backed by Redis, as the golden path. |
 | **Secrets management** | Replace `.env` with Sealed Secrets / External Secrets + a vault; show the `GATEWAY_API_KEY` flowing through. |
 
